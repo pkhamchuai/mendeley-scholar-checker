@@ -222,8 +222,77 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
+// ── Unpaywall: find free legal PDF URL for a DOI ─────────────
+// Free API — no key needed, just an email for identification
+const UNPAYWALL_EMAIL = "mendeley-scholar-checker@example.com";
+
+async function findFreePdfUrl(doi) {
+  if (!doi) return null;
+  try {
+    const res = await fetch(
+      `https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=${UNPAYWALL_EMAIL}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Prefer the best OA location with a PDF URL
+    const best = data.best_oa_location;
+    return best?.url_for_pdf || best?.url || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Attach a PDF to an existing Mendeley document ────────────
+async function attachPdf(documentId, pdfUrl, accessToken) {
+  try {
+    console.log("[Mendeley] Fetching PDF from:", pdfUrl);
+    const pdfRes = await fetch(pdfUrl);
+    if (!pdfRes.ok) {
+      console.warn("[Mendeley] PDF fetch failed:", pdfRes.status);
+      return false;
+    }
+
+    const pdfBuffer = await pdfRes.arrayBuffer();
+
+    // Validate magic bytes: every real PDF starts with "%PDF"
+    const header = new Uint8Array(pdfBuffer.slice(0, 4));
+    const magic  = String.fromCharCode(...header);
+    if (magic !== "%PDF") {
+      console.warn("[Mendeley] Not a real PDF (magic bytes missing) — skipping attach. Got:", magic);
+      return false;
+    }
+
+    const filename = pdfUrl.split("/").pop()?.split("?")[0]?.replace(/[^a-zA-Z0-9._-]/g, "_") || "paper.pdf";
+    const safeFilename = filename.endsWith(".pdf") ? filename : filename + ".pdf";
+
+    const uploadRes = await fetch(`${MENDELEY_API_BASE}/files`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${safeFilename}"`,
+        "Link": `<${MENDELEY_API_BASE}/documents/${documentId}>; rel="document"`,
+      },
+      body: pdfBuffer,
+    });
+
+    if (uploadRes.ok) {
+      console.log("[Mendeley] PDF attached successfully:", safeFilename);
+      return true;
+    } else {
+      const err = await uploadRes.text();
+      console.warn("[Mendeley] PDF attach failed:", uploadRes.status, err);
+      return false;
+    }
+  } catch (e) {
+    console.warn("[Mendeley] PDF attach exception:", e.message);
+    return false;
+  }
+}
+
 // ── Add article to Mendeley library ──────────────────────────
-async function addToLibrary({ title, doi, authors, year, journal, url }) {
+async function addToLibrary({ title, doi, authors, year, journal, url, pdfUrl }) {
   const accessToken = await getValidAccessToken();
   if (!accessToken) return { success: false, needsAuth: true };
 
@@ -264,7 +333,18 @@ async function addToLibrary({ title, doi, authors, year, journal, url }) {
     if (res.ok) {
       const created = await res.json();
       console.log("[Mendeley] Added successfully:", created.title);
-      return { success: true, id: created.id, title: created.title };
+
+      // Try to attach PDF: Unpaywall (via DOI) first, then Scholar direct link
+      let pdfAttached = false;
+      const freePdfUrl = (doi ? await findFreePdfUrl(doi) : null) || pdfUrl || null;
+      if (freePdfUrl) {
+        console.log("[Mendeley] Trying PDF from:", freePdfUrl);
+        pdfAttached = await attachPdf(created.id, freePdfUrl, accessToken);
+      } else {
+        console.log("[Mendeley] No free PDF found for this paper");
+      }
+
+      return { success: true, id: created.id, title: created.title, pdfAttached };
     } else {
       const errText = await res.text();
       console.error("[Mendeley] Add failed:", res.status, errText);

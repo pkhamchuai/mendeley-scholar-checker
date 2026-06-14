@@ -52,6 +52,51 @@ function extractURL(el) {
   return titleLink?.href || null;
 }
 
+// ── Extract free PDF URL from Scholar result ──────────────────
+// Scholar shows a [PDF] badge on the right side of some results (.gs_or_ggsm)
+// Only return URLs from sources likely to be freely accessible
+const FREE_PDF_HOSTS = [
+  "arxiv.org",
+  "semanticscholar.org",
+  "europepmc.org",
+  "ncbi.nlm.nih.gov",
+  "biorxiv.org",
+  "medrxiv.org",
+  "plos",
+  "peerj.com",
+  "mdpi.com",
+  "frontiersin.org",
+  "hal.science",
+  "hal.archives-ouvertes.fr",
+  "core.ac.uk",
+  "unpaywall.org",
+  "openreview.net",
+  "openaccess.thecvf.com",  // CVPR, ICCV, ECCV — free
+  "ecva.net",               // ECCV
+  "aclanthology.org",       // NLP papers
+  "aaai.org/ojs",           // AAAI open access
+  "jmlr.org",               // JMLR
+  "proceedings.mlr.press",  // ICML, AISTATS
+  "researchgate.net/profile", // direct PDF links sometimes work
+];
+
+function extractPDFUrl(el) {
+  // Scholar puts the [PDF] link in .gs_or_ggsm or .gs_ggs
+  const pdfLink =
+    el.querySelector(".gs_or_ggsm a[href]") ||
+    el.querySelector(".gs_ggs a[href]");
+
+  if (!pdfLink) return null;
+  const href = pdfLink.href || "";
+
+  // Only use if it ends in .pdf or is from a known free host
+  const isFreeHost = FREE_PDF_HOSTS.some((h) => href.includes(h));
+  const isPdfLink  = href.toLowerCase().includes(".pdf");
+
+  if (isFreeHost || isPdfLink) return href;
+  return null;
+}
+
 // ── Create badge element ──────────────────────────────────────
 function makeBadge(state) {
   const badge = document.createElement("span");
@@ -93,7 +138,12 @@ async function handleAddClick(badge, cardEl, articleData) {
   if (result?.success) {
     // Flip to "In Mendeley" ✓
     const foundBadge = makeBadge("found");
-    foundBadge.title = `Added: "${result.title || articleData.title}"`;
+    if (result.pdfAttached) {
+      foundBadge.querySelector(".msc-label").textContent = "In Mendeley + PDF";
+      foundBadge.title = `Added with PDF: "${result.title || articleData.title}"`;
+    } else {
+      foundBadge.title = `Added (metadata only): "${result.title || articleData.title}"`;
+    }
     cardEl.setAttribute(BADGE_ATTR, "found");
     addingBadge.replaceWith(foundBadge);
   } else if (result?.needsAuth) {
@@ -122,8 +172,9 @@ async function processResult(el) {
   if (!title && !doi) return;
 
   const { authors, year, journal } = extractMeta(el);
-  const url = extractURL(el);
-  const articleData = { title, doi, authors, year, journal, url };
+  const url    = extractURL(el);
+  const pdfUrl = extractPDFUrl(el);
+  const articleData = { title, doi, authors, year, journal, url, pdfUrl };
 
   const targetEl =
     el.querySelector(".gs_fl") ||
@@ -160,7 +211,12 @@ async function processResult(el) {
     // Not in library — make it clickable
     finalBadge = makeBadge("notfound");
     finalBadge.style.cursor = "pointer";
-    finalBadge.title = "Click to add this paper to your Mendeley library";
+    if (articleData.pdfUrl) {
+      finalBadge.title = "Click to add to Mendeley (PDF found — will try to attach)";
+      finalBadge.querySelector(".msc-label").textContent = "Add to Mendeley + PDF";
+    } else {
+      finalBadge.title = "Click to add this paper to your Mendeley library (metadata only)";
+    }
     finalBadge.addEventListener("click", () => handleAddClick(finalBadge, el, articleData));
     el.setAttribute(BADGE_ATTR, "notfound");
   }

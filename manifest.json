@@ -13,7 +13,9 @@
   ],
   "host_permissions": [
     "https://scholar.google.com/*",
-    "https://api.mendeley.com/*"
+    "https://api.mendeley.com/*",
+    "https://api.unpaywall.org/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"
