@@ -14,12 +14,15 @@ A Chrome extension that checks Google Scholar search results against your person
 |---|---|---|
 | ✅ **In Mendeley** (green) | Paper already in your library | — |
 | ➕ **Add to Mendeley** (blue) | Not in library | Click to add instantly |
+| ➕ **Add to Mendeley + PDF** (blue) | Free PDF detected | Click to add with PDF |
 | ⏳ **Checking…** (gray, pulsing) | Querying your library | Wait |
 | ⚠️ **Login required** (amber) | Not connected | Click extension icon |
 
 - Matches by **DOI first** (exact), then **fuzzy title match** as fallback
 - Auto-saves **title, authors, year, journal, and URL** to Mendeley when adding
-- Works on Google Scholar search results pages and user-profile pages
+- Tries to attach a free PDF automatically via **Unpaywall** and open-access sources
+- Validates downloaded files are real PDFs before attaching (no corrupt files)
+- Works on Google Scholar search results pages
 - Handles dynamic pagination — badges appear on newly loaded results too
 
 ---
@@ -47,43 +50,42 @@ mendeley-scholar-checker/
 
 ---
 
-## 🚀 Setup Guide
+## 🚀 Quick Start
 
-### Prerequisites
-
-- **Google Chrome** browser
-- **Node.js v14+** — [download here](https://nodejs.org/) (only needed for the build step, no npm packages required)
+### What you need
+- **Google Chrome**
+- **Node.js v14+** — download and install from [nodejs.org](https://nodejs.org/) (just click Next through the installer)
 - A **Mendeley / Elsevier account** — [register free at mendeley.com](https://www.mendeley.com/sign-in/)
+- Any **text editor** — Notepad on Windows, TextEdit on Mac, nano in terminal, anything works
+
+No VS Code, no Git, no other tools required.
 
 ---
 
 ### Step 1 — Get the code
 
-**Option A: Clone from GitHub**
-```bash
-git clone https://github.com/YOUR_USERNAME/mendeley-scholar-checker.git
-cd mendeley-scholar-checker
-```
+Click the green **Code** button on this GitHub page → **Download ZIP** → unzip the folder anywhere you like.
 
-**Option B: Download ZIP**
-
-Download and unzip, then open a terminal inside the folder.
+Open a terminal inside the unzipped folder:
+- **Windows**: open the folder → click the address bar → type `cmd` → press Enter
+- **Mac**: right-click the folder → "New Terminal at Folder"
+- **Linux**: right-click → "Open Terminal Here"
 
 ---
 
 ### Step 2 — Do an initial build
 
-Run the build script once to generate the `dist/` folder (credentials can be empty at this stage):
+In the terminal, run:
 
 ```bash
 node build.js
 ```
 
-> ⚠️ It will warn about missing credentials — that's fine for now. The `dist/` folder will still be created.
+> It will warn about missing credentials — that's fine for now. The `dist/` folder will still be created.
 
 ---
 
-### Step 3 — Load the extension in Chrome (to get your Extension ID)
+### Step 3 — Load the extension in Chrome
 
 1. Open Chrome and go to `chrome://extensions/`
 2. Toggle **Developer mode** ON (switch in the top-right corner)
@@ -99,52 +101,52 @@ node build.js
 
 ### Step 4 — Pin your Extension ID (important!)
 
-By default, Chrome assigns a new Extension ID every time you remove and re-add an unpacked extension. This breaks your OAuth Redirect URL. Pinning the ID prevents this permanently.
-
-Run `get_key.py` with your Extension ID from Step 3:
+Without this step, Chrome assigns a new Extension ID every time you remove and re-add the extension, which breaks the login. Run this once to lock it permanently:
 
 ```bash
 python3 get_key.py abcdefghijklmnopqrstuvwxyzabcdef
 ```
 
-Output will look like:
+> Replace the ID with your actual ID from Step 3.
+> On Windows you may need to use `python` instead of `python3`.
+
+The output will look like:
 
 ```
 ✅  Extension ID : abcdefghijklmnopqrstuvwxyzabcdef
-🔑  Key          : AAAAAABBBBBBCCCCCCDDDDDDEEEEEEFF...
+🔑  Key          : AAAAAABBBBBBCCCCCC...
 🔗  Redirect URL : https://abcdefghijklmnopqrstuvwxyzabcdef.chromiumapp.org/
 ```
 
-Copy the **Key** and **Redirect URL** — you'll need both in the next steps.
+Copy both the **Key** and the **Redirect URL** — you need them in the next two steps.
 
 ---
 
 ### Step 5 — Register a Mendeley API app
 
 1. Go to [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html)
-2. Sign in with your **Elsevier credentials** (same as your Mendeley login)
-3. Click **Create new app**
-4. Fill in the form:
+2. Sign in with your **Elsevier credentials** (same email/password as Mendeley)
+3. Click **Create new app** and fill in the form:
 
    | Field | Value |
    |---|---|
    | **App Name** | `Scholar Checker` (or anything you like) |
    | **Description** | `Personal Chrome extension to check Mendeley library` |
    | **Authorisation Flow** | `Elsevier` |
-   | **Redirect URL** | Paste your `https://YOUR_EXTENSION_ID.chromiumapp.org/` from Step 4 |
+   | **Redirect URL** | Paste your `https://...chromiumapp.org/` from Step 4 |
 
-5. Click **Register** — you will receive a **Client ID** and **Client Secret**. Copy both.
+4. Click **Register** → copy the **Client ID** and **Client Secret** shown
 
-> ⚠️ Do **not** click "Pack extension" on `chrome://extensions/` — that's for distributing `.crx` files and is not needed here.
+> ⚠️ Do **not** click "Pack extension" on `chrome://extensions/` — that's unrelated and not needed here.
 
 ---
 
 ### Step 6 — Configure your credentials
 
-In the project root, copy the example env file:
+Copy the example credentials file:
 
 ```bash
-# macOS / Linux / WSL
+# Mac / Linux
 cp .env.example .env
 
 # Windows (Command Prompt)
@@ -154,7 +156,7 @@ copy .env.example .env
 Copy-Item .env.example .env
 ```
 
-Open `.env` in any text editor and fill in all three values:
+Open `.env` with any text editor and fill in all three values:
 
 ```env
 MENDELEY_CLIENT_ID=paste_your_client_id_here
@@ -162,105 +164,84 @@ MENDELEY_CLIENT_SECRET=paste_your_client_secret_here
 EXTENSION_KEY=paste_your_key_here
 ```
 
-> ⚠️ **Never share `.env` or commit it to GitHub.** It is already listed in `.gitignore` so this is handled automatically.
+> ⚠️ Never share this file or commit it to GitHub — it's already in `.gitignore` so it's protected automatically.
 
 ---
 
-### Step 7 — Build the extension
-
-Run the build script to inject your credentials and pin the Extension ID into `dist/`:
+### Step 7 — Build and reload
 
 ```bash
 node build.js
 ```
 
-Expected output:
-```
-✅  Build complete → dist/
-    Load the dist/ folder in chrome://extensions/
-```
-
-If you see an error like `❌ MENDELEY_CLIENT_ID is not set`, double-check your `.env` file.
+Then go to `chrome://extensions/` → find **Mendeley Scholar Checker** → click **↻ Reload**.
 
 ---
 
-### Step 8 — Reload in Chrome
+### Step 8 — Connect your Mendeley account
 
-1. Go to `chrome://extensions/`
-2. Find **Mendeley Scholar Checker**
-3. Click the **↻ Reload** button
-
-The Extension ID is now pinned — it will stay the same even if you remove and re-add the extension.
-
----
-
-### Step 9 — Connect to your Mendeley account
-
-1. Click the extension icon in the Chrome toolbar (puzzle piece → pin the extension)
+1. Click the extension icon in the Chrome toolbar (puzzle piece icon → pin it for easy access)
 2. Click **Connect Mendeley**
-3. An Elsevier login window will appear — sign in
-4. After successful login, the popup shows **Connected to Mendeley** ✅
+3. An Elsevier login window appears — sign in with your Mendeley credentials
+4. The popup shows **Connected to Mendeley** ✅
 
 ---
 
-### Step 10 — Use it!
+### Step 9 — Use it!
 
-Go to [scholar.google.com](https://scholar.google.com) and search for any topic.
+Go to [scholar.google.com](https://scholar.google.com), search for any topic, and badges will appear on each result within a few seconds.
 
-Within a few seconds, each result will show a badge:
-- **Green ✓ In Mendeley** — you already have it
-- **Blue + Add to Mendeley** — click to save it to your library instantly
+- **Blue badge** → click to save the paper (+ PDF if one is freely available)
+- **Green badge** → already in your library
 
 ---
 
-## 🔄 Development Workflow
+## 🔄 After Making Changes
 
-After making any changes to source files (not inside `dist/`):
+If you edit any source file, rebuild and reload:
 
 ```bash
 node build.js
 ```
 
-Then go to `chrome://extensions/` and click **↻ Reload** on the extension.
-
-> Tip: Keep `chrome://extensions/` open in a pinned tab while developing.
+Then `chrome://extensions/` → **↻ Reload**.
 
 ---
 
 ## 🔒 Security Notes
 
-| File | Committed to GitHub? | Why |
+| File | Goes to GitHub? | Why |
 |---|---|---|
-| `.env` | ❌ No | Contains real secrets — gitignored |
-| `dist/` | ❌ No | Contains injected secrets — gitignored |
-| `.env.example` | ✅ Yes | Only placeholder values, safe to share |
-| `background.js` | ✅ Yes | Contains `YOUR_CLIENT_ID_HERE` placeholder only |
-| `manifest.json` | ✅ Yes | Contains `PASTE_YOUR_KEY_HERE` placeholder only |
-
-The `build.js` script does a simple string replacement at build time — no external dependencies, no webpack, no bundler needed.
+| `.env` | ❌ No | Contains your real secrets |
+| `dist/` | ❌ No | Contains injected secrets |
+| `.env.example` | ✅ Yes | Placeholder values only |
+| `background.js` | ✅ Yes | Placeholder values only |
+| `manifest.json` | ✅ Yes | Placeholder values only |
 
 ---
 
 ## 🐛 Troubleshooting
 
 **"Login error: Authorization page could not be loaded"**
-- Your Extension ID changed (happens when you remove and re-add the extension without a pinned key)
-- Run `python3 get_key.py <new-id>`, update `EXTENSION_KEY` in `.env`, rebuild, and update the Redirect URL in your Mendeley app settings
+- Your Extension ID changed — run `python3 get_key.py <new-id>`, update `EXTENSION_KEY` in `.env`, run `node build.js`, reload, and update the Redirect URL in your Mendeley app settings
 
 **"Login error: Token exchange failed: 403"**
-- The Redirect URL in your Mendeley app settings doesn't match your Extension ID
-- Go to [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html) → edit your app → update the Redirect URL to `https://<your-extension-id>.chromiumapp.org/`
+- The Redirect URL in Mendeley app settings doesn't match your Extension ID
+- Go to [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html) → edit your app → update the Redirect URL
 
 **"Login required" badge on every result**
-- Click the extension icon and reconnect — your token may have expired
+- Click the extension icon → reconnect (token expired)
 
 **No badges appearing**
-- Make sure you're on a Google Scholar *search results* page (URL contains `scholar.google.com/scholar?`)
-- Open the extension popup and confirm it says "Connected to Mendeley"
+- Make sure you're on a Google Scholar search results page (URL contains `scholar.google.com/scholar?`)
+- Confirm the popup says "Connected to Mendeley"
 - Try reloading the Scholar page
 
-**Build fails with missing credentials error**
-- Check that `.env` exists (not just `.env.example`) and has real values filled in
+**"Add failed" on a paper**
+- Open `chrome://extensions/` → click **Service worker** → Console tab → retry adding → paste the error here
+
+**PDF not attached**
+- Expected for paywalled papers (IEEE, Elsevier, Springer). The extension only attaches PDFs from free/open-access sources. The paper metadata is always saved regardless.
 
 ---
 
