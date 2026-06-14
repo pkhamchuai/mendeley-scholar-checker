@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mendeley Scholar Checker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 280px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #ffffff;
+      color: #202124;
+    }
+
+    /* Header */
+    .header {
+      background: #9b1b30;
+      padding: 14px 16px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-logo {
+      width: 28px;
+      height: 28px;
+      background: #ffffff22;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .header-title {
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .header-sub {
+      color: #ffffff99;
+      font-size: 11px;
+      margin-top: 1px;
+    }
+
+    /* Body */
+    .body {
+      padding: 16px;
+    }
+
+    /* Status pill */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #dadce0;
+      flex-shrink: 0;
+    }
+
+    .status-dot.connected { background: #34a853; }
+    .status-dot.disconnected { background: #ea4335; }
+
+    .status-text {
+      font-size: 13px;
+      color: #5f6368;
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%;
+      padding: 9px 14px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .btn:hover { opacity: 0.88; }
+    .btn:active { opacity: 0.7; }
+
+    .btn-primary {
+      background: #9b1b30;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #f1f3f4;
+      color: #3c4043;
+      margin-top: 8px;
+    }
+
+    /* Info box */
+    .info-box {
+      background: #f8f9fa;
+      border: 1px solid #e8eaed;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 14px;
+      font-size: 11.5px;
+      color: #5f6368;
+      line-height: 1.5;
+    }
+
+    .info-box strong {
+      color: #202124;
+    }
+
+    /* Redirect URL box */
+    .redirect-box {
+      background: #e8f0fe;
+      border: 1px solid #aac4f5;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 10px;
+    }
+
+    .redirect-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #1a56cc;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .redirect-url {
+      font-family: "Courier New", monospace;
+      font-size: 10px;
+      color: #1a56cc;
+      word-break: break-all;
+      cursor: pointer;
+      user-select: all;
+    }
+
+    .redirect-url:hover { text-decoration: underline; }
+
+    .copy-hint {
+      font-size: 10px;
+      color: #5f6368;
+      margin-top: 3px;
+    }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #ffffff44;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-logo">📚</div>
+    <div>
+      <div class="header-title">Mendeley Checker</div>
+      <div class="header-sub">Google Scholar integration</div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Auth status -->
+    <div class="status-row">
+      <div class="status-dot" id="statusDot"></div>
+      <div class="status-text" id="statusText">Checking...</div>
+    </div>
+
+    <!-- Logged-out view -->
+    <div id="loggedOutView">
+      <button class="btn btn-primary" id="loginBtn">
+        <span id="loginLabel">Connect Mendeley</span>
+        <span class="spinner hidden" id="loginSpinner"></span>
+      </button>
+
+      <div class="redirect-box">
+        <div class="redirect-label">Your Redirect URI</div>
+        <div class="redirect-url" id="redirectUrl" title="Click to copy">Loading...</div>
+        <div class="copy-hint">Copy this → paste into your Mendeley app settings</div>
+      </div>
+
+      <div class="info-box">
+        <strong>Setup steps:</strong><br>
+        1. Register app at <strong>dev.mendeley.com/myapps.html</strong><br>
+        2. Paste the URI above as redirect URL<br>
+        3. Copy Client ID &amp; Secret into <strong>background.js</strong><br>
+        4. Click "Connect Mendeley" above
+      </div>
+    </div>
+
+    <!-- Logged-in view -->
+    <div id="loggedInView" class="hidden">
+      <div class="info-box" style="margin-bottom: 12px;">
+        ✅ Connected! Badges will appear automatically on Google Scholar search results.
+      </div>
+      <button class="btn btn-secondary" id="logoutBtn">Disconnect Mendeley</button>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

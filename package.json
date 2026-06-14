@@ -1,0 +1,11 @@
+{
+  "name": "mendeley-scholar-checker",
+  "version": "1.0.0",
+  "description": "Chrome extension: check Google Scholar articles against your Mendeley library",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

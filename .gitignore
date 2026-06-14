@@ -1,0 +1,13 @@
+# Secret credentials — NEVER commit these
+.env
+
+# Build output (generated from source)
+dist/
+
+# Node
+node_modules/
+package-lock.json
+
+# OS clutter
+.DS_Store
+Thumbs.db

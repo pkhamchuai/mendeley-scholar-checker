@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Mendeley Scholar Checker",
+  "version": "1.0.0",
+  "description": "Check if Google Scholar articles are already in your Mendeley library",
+  "permissions": [
+    "storage",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://scholar.google.com/*",
+    "https://api.mendeley.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://scholar.google.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Mendeley Scholar Checker"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
