@@ -227,19 +227,23 @@ async function addToLibrary({ title, doi, authors, year, journal, url }) {
   const accessToken = await getValidAccessToken();
   if (!accessToken) return { success: false, needsAuth: true };
 
-  const doc = { type: "journal_article" };
+  const doc = { type: "journal" }; // Mendeley API uses "journal" not "journal_article"
   if (title)   doc.title = title;
   if (doi)     doc.identifiers = { doi };
   if (year)    doc.year = parseInt(year, 10) || undefined;
   if (journal) doc.source = journal;
   if (url)     doc.websites = [url];
 
-  // Parse "First Last" style author strings
+  // Parse authors from Scholar's ".gs_a" format: "A Smith, B Jones - Journal, 2009 - Publisher"
+  // We only want the author portion BEFORE the first " - "
   if (authors) {
-    doc.authors = authors
-      .split(/,\s*(?=[A-Z])|\s+and\s+/i)
+    const authorPart = authors.split(/\s+-\s+/)[0]; // strip "- Journal, Year - Publisher"
+    doc.authors = authorPart
+      .split(",")
       .map((a) => a.trim()).filter(Boolean)
+      .filter((a) => /[A-Za-z]/.test(a) && !/^\d+$/.test(a)) // skip pure numbers
       .map((a) => {
+        // Scholar uses "F Last" or "FM Last" initials format
         const parts = a.split(/\s+/);
         if (parts.length === 1) return { last_name: parts[0] };
         return { first_name: parts.slice(0, -1).join(" "), last_name: parts[parts.length - 1] };
@@ -259,12 +263,16 @@ async function addToLibrary({ title, doi, authors, year, journal, url }) {
 
     if (res.ok) {
       const created = await res.json();
+      console.log("[Mendeley] Added successfully:", created.title);
       return { success: true, id: created.id, title: created.title };
     } else {
       const errText = await res.text();
+      console.error("[Mendeley] Add failed:", res.status, errText);
+      console.error("[Mendeley] Payload sent:", JSON.stringify(doc, null, 2));
       return { success: false, error: `${res.status}: ${errText}` };
     }
   } catch (e) {
+    console.error("[Mendeley] Add exception:", e);
     return { success: false, error: e.message };
   }
 }

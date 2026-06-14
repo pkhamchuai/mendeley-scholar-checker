@@ -35,6 +35,7 @@ mendeley-scholar-checker/
 ├── styles.css          # Badge styles injected into Scholar pages
 ├── manifest.json       # Chrome Extension Manifest V3 config
 ├── build.js            # Build script: reads .env → generates dist/
+├── get_key.py          # Helper: converts Extension ID → manifest key
 ├── package.json        # npm scripts
 ├── .env.example        # Template — copy to .env and fill in credentials
 ├── .gitignore          # Keeps .env and dist/ out of GitHub
@@ -60,7 +61,7 @@ mendeley-scholar-checker/
 
 **Option A: Clone from GitHub**
 ```bash
-git clone https://github.com/pkhamchuai/mendeley-scholar-checker.git
+git clone https://github.com/YOUR_USERNAME/mendeley-scholar-checker.git
 cd mendeley-scholar-checker
 ```
 
@@ -70,32 +71,55 @@ Download and unzip, then open a terminal inside the folder.
 
 ---
 
-### Step 2 — Load the extension in Chrome (to get your Extension ID)
+### Step 2 — Do an initial build
 
-You need the Extension ID before registering the Mendeley app, because the Redirect URL depends on it.
+Run the build script once to generate the `dist/` folder (credentials can be empty at this stage):
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Toggle **Developer mode** ON (switch in the top-right corner)
-3. Click **Load unpacked**
-4. Select the `dist/` folder inside the project
+```bash
+node build.js
+```
 
-   > ⚠️ If `dist/` doesn't exist yet, run `node build.js` first (see Step 4), even with empty credentials — it will still generate the folder structure.
-
-5. Find your extension in the list and copy the **ID** shown below the name:
-
-   ```
-   ID: abcdefghijklmnopqrstuvwx
-   ```
-
-6. Build your **Redirect URL** from the ID:
-   ```
-   https://abcdefghijklmnopqrstuvwx.chromiumapp.org/
-   ```
-   Keep this — you'll need it in the next step.
+> ⚠️ It will warn about missing credentials — that's fine for now. The `dist/` folder will still be created.
 
 ---
 
-### Step 3 — Register a Mendeley API app
+### Step 3 — Load the extension in Chrome (to get your Extension ID)
+
+1. Open Chrome and go to `chrome://extensions/`
+2. Toggle **Developer mode** ON (switch in the top-right corner)
+3. Click **Load unpacked** → select the `dist/` folder inside the project
+4. Find **Mendeley Scholar Checker** in the list
+5. Copy the **ID** shown below the name (only visible when Developer mode is ON):
+
+   ```
+   ID: abcdefghijklmnopqrstuvwxyzabcdef
+   ```
+
+---
+
+### Step 4 — Pin your Extension ID (important!)
+
+By default, Chrome assigns a new Extension ID every time you remove and re-add an unpacked extension. This breaks your OAuth Redirect URL. Pinning the ID prevents this permanently.
+
+Run `get_key.py` with your Extension ID from Step 3:
+
+```bash
+python3 get_key.py abcdefghijklmnopqrstuvwxyzabcdef
+```
+
+Output will look like:
+
+```
+✅  Extension ID : abcdefghijklmnopqrstuvwxyzabcdef
+🔑  Key          : AAAAAABBBBBBCCCCCCDDDDDDEEEEEEFF...
+🔗  Redirect URL : https://abcdefghijklmnopqrstuvwxyzabcdef.chromiumapp.org/
+```
+
+Copy the **Key** and **Redirect URL** — you'll need both in the next steps.
+
+---
+
+### Step 5 — Register a Mendeley API app
 
 1. Go to [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html)
 2. Sign in with your **Elsevier credentials** (same as your Mendeley login)
@@ -107,18 +131,20 @@ You need the Extension ID before registering the Mendeley app, because the Redir
    | **App Name** | `Scholar Checker` (or anything you like) |
    | **Description** | `Personal Chrome extension to check Mendeley library` |
    | **Authorisation Flow** | `Elsevier` |
-   | **Redirect URL** | Paste your `https://YOUR_EXTENSION_ID.chromiumapp.org/` from Step 2 |
+   | **Redirect URL** | Paste your `https://YOUR_EXTENSION_ID.chromiumapp.org/` from Step 4 |
 
 5. Click **Register** — you will receive a **Client ID** and **Client Secret**. Copy both.
 
+> ⚠️ Do **not** click "Pack extension" on `chrome://extensions/` — that's for distributing `.crx` files and is not needed here.
+
 ---
 
-### Step 4 — Configure your credentials
+### Step 6 — Configure your credentials
 
 In the project root, copy the example env file:
 
 ```bash
-# macOS / Linux
+# macOS / Linux / WSL
 cp .env.example .env
 
 # Windows (Command Prompt)
@@ -128,29 +154,24 @@ copy .env.example .env
 Copy-Item .env.example .env
 ```
 
-Open `.env` in any text editor and fill in your credentials:
+Open `.env` in any text editor and fill in all three values:
 
 ```env
 MENDELEY_CLIENT_ID=paste_your_client_id_here
 MENDELEY_CLIENT_SECRET=paste_your_client_secret_here
+EXTENSION_KEY=paste_your_key_here
 ```
 
 > ⚠️ **Never share `.env` or commit it to GitHub.** It is already listed in `.gitignore` so this is handled automatically.
 
 ---
 
-### Step 5 — Build the extension
+### Step 7 — Build the extension
 
-Run the build script to inject your credentials into the `dist/` folder:
+Run the build script to inject your credentials and pin the Extension ID into `dist/`:
 
 ```bash
 node build.js
-```
-
-Or equivalently:
-
-```bash
-npm run build
 ```
 
 Expected output:
@@ -163,21 +184,17 @@ If you see an error like `❌ MENDELEY_CLIENT_ID is not set`, double-check your 
 
 ---
 
-### Step 6 — Load (or reload) in Chrome
+### Step 8 — Reload in Chrome
 
-If you already loaded the extension in Step 2:
-- Go to `chrome://extensions/`
-- Find **Mendeley Scholar Checker**
-- Click the **↻ Reload** button
-
-If loading for the first time:
 1. Go to `chrome://extensions/`
-2. Enable **Developer mode**
-3. Click **Load unpacked** → select the `dist/` folder
+2. Find **Mendeley Scholar Checker**
+3. Click the **↻ Reload** button
+
+The Extension ID is now pinned — it will stay the same even if you remove and re-add the extension.
 
 ---
 
-### Step 7 — Connect to your Mendeley account
+### Step 9 — Connect to your Mendeley account
 
 1. Click the extension icon in the Chrome toolbar (puzzle piece → pin the extension)
 2. Click **Connect Mendeley**
@@ -186,7 +203,7 @@ If loading for the first time:
 
 ---
 
-### Step 8 — Use it!
+### Step 10 — Use it!
 
 Go to [scholar.google.com](https://scholar.google.com) and search for any topic.
 
@@ -204,7 +221,7 @@ After making any changes to source files (not inside `dist/`):
 node build.js
 ```
 
-Then go to `chrome://extensions/` and click **Reload** on the extension.
+Then go to `chrome://extensions/` and click **↻ Reload** on the extension.
 
 > Tip: Keep `chrome://extensions/` open in a pinned tab while developing.
 
@@ -218,6 +235,7 @@ Then go to `chrome://extensions/` and click **Reload** on the extension.
 | `dist/` | ❌ No | Contains injected secrets — gitignored |
 | `.env.example` | ✅ Yes | Only placeholder values, safe to share |
 | `background.js` | ✅ Yes | Contains `YOUR_CLIENT_ID_HERE` placeholder only |
+| `manifest.json` | ✅ Yes | Contains `PASTE_YOUR_KEY_HERE` placeholder only |
 
 The `build.js` script does a simple string replacement at build time — no external dependencies, no webpack, no bundler needed.
 
@@ -225,9 +243,13 @@ The `build.js` script does a simple string replacement at build time — no exte
 
 ## 🐛 Troubleshooting
 
+**"Login error: Authorization page could not be loaded"**
+- Your Extension ID changed (happens when you remove and re-add the extension without a pinned key)
+- Run `python3 get_key.py <new-id>`, update `EXTENSION_KEY` in `.env`, rebuild, and update the Redirect URL in your Mendeley app settings
+
 **"Login error: Token exchange failed: 403"**
 - The Redirect URL in your Mendeley app settings doesn't match your Extension ID
-- Go to [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html) → edit your app → update the Redirect URL
+- Go to [dev.mendeley.com/myapps.html](https://dev.mendeley.com/myapps.html) → edit your app → update the Redirect URL to `https://<your-extension-id>.chromiumapp.org/`
 
 **"Login required" badge on every result**
 - Click the extension icon and reconnect — your token may have expired
@@ -237,11 +259,8 @@ The `build.js` script does a simple string replacement at build time — no exte
 - Open the extension popup and confirm it says "Connected to Mendeley"
 - Try reloading the Scholar page
 
-**Build fails with "YOUR_CLIENT_ID_HERE not replaced"**
-- Check that `.env` exists (not just `.env.example`) and has real values
-
-**Extension ID changed after reloading**
-- This happens if you delete and re-add the extension. You must update the Redirect URL in your Mendeley app settings with the new ID, then rebuild.
+**Build fails with missing credentials error**
+- Check that `.env` exists (not just `.env.example`) and has real values filled in
 
 ---
 

@@ -3,6 +3,10 @@
   "name": "Mendeley Scholar Checker",
   "version": "1.0.0",
   "description": "Check if Google Scholar articles are already in your Mendeley library",
+
+  "__IMPORTANT__": "Set the key field below! Run: python3 get_key.py <your-extension-id>",
+  "key": "PASTE_YOUR_KEY_HERE",
+
   "permissions": [
     "storage",
     "identity"
