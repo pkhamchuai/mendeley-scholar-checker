@@ -124,31 +124,47 @@ async function getValidAccessToken() {
 }
 
 // ── Mendeley library search ───────────────────────────────────
-// Search by DOI (exact match)
-async function searchByDOI(doi, accessToken) {
-  const url = `${MENDELEY_API_BASE}/documents?doi=${encodeURIComponent(doi)}&limit=1`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/vnd.mendeley-document.1+json",
-    },
-  });
-  if (!res.ok) return [];
-  return res.json();
+
+const LIBRARY_CACHE_KEY = "msc_lib_cache";
+const LIBRARY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// Fetch all documents from the user's library and cache them locally.
+// The Mendeley API does not support title-based search within a personal library,
+// so we maintain a local index and fuzzy-match against it.
+async function getLibraryIndex(accessToken) {
+  const stored = await chrome.storage.local.get(LIBRARY_CACHE_KEY);
+  const cache = stored[LIBRARY_CACHE_KEY];
+  if (cache && Date.now() - cache.ts < LIBRARY_CACHE_TTL) return cache.docs;
+
+  const docs = [];
+  let nextUrl = `${MENDELEY_API_BASE}/documents?limit=500`;
+
+  while (nextUrl) {
+    const res = await fetch(nextUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/vnd.mendeley-document.1+json",
+      },
+    });
+    if (!res.ok) break;
+
+    const page = await res.json();
+    for (const d of page) {
+      docs.push({ title: d.title || "", doi: d.identifiers?.doi || "" });
+    }
+
+    // Follow pagination via Link header
+    const linkHeader = res.headers.get("Link") || "";
+    const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+    nextUrl = nextMatch ? nextMatch[1] : null;
+  }
+
+  await chrome.storage.local.set({ [LIBRARY_CACHE_KEY]: { docs, ts: Date.now() } });
+  return docs;
 }
 
-// Search by title (partial/fuzzy match)
-async function searchByTitle(title, accessToken) {
-  // Mendeley API: search your library with title keyword
-  const url = `${MENDELEY_API_BASE}/documents?title=${encodeURIComponent(title)}&limit=5`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/vnd.mendeley-document.1+json",
-    },
-  });
-  if (!res.ok) return [];
-  return res.json();
+function invalidateLibraryCache() {
+  return chrome.storage.local.remove(LIBRARY_CACHE_KEY);
 }
 
 // Normalize title for fuzzy comparison
@@ -160,34 +176,44 @@ function titlesMatch(a, b) {
   const na = normalizeTitle(a);
   const nb = normalizeTitle(b);
   if (na === nb) return true;
-  // Substring match (Scholar sometimes truncates with "…")
+  // Prefix match (Scholar sometimes truncates with "…")
   if (na.length > 20 && nb.startsWith(na.slice(0, Math.floor(na.length * 0.85)))) return true;
   if (nb.length > 20 && na.startsWith(nb.slice(0, Math.floor(nb.length * 0.85)))) return true;
+  // Word-overlap: ≥85% of significant words in the shorter title appear in the longer one
+  const wa = new Set(na.split(" ").filter((w) => w.length > 3));
+  const wb = new Set(nb.split(" ").filter((w) => w.length > 3));
+  const [smaller, larger] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
+  if (smaller.size > 0) {
+    const overlap = [...smaller].filter((w) => larger.has(w)).length;
+    if (overlap / smaller.size >= 0.85) return true;
+  }
   return false;
 }
 
-// Main check: returns { found: bool, title: string|null }
+// Main check: returns { found: bool, matchedTitle: string|null }
 async function checkInLibrary({ doi, title }) {
   const accessToken = await getValidAccessToken();
   if (!accessToken) return { found: false, needsAuth: true };
 
   try {
-    // 1) DOI check (most reliable)
+    const index = await getLibraryIndex(accessToken);
+
+    // 1) DOI match (exact, case-insensitive)
     if (doi) {
-      const results = await searchByDOI(doi, accessToken);
-      if (results.length > 0) return { found: true, matchedTitle: results[0].title };
+      const normDoi = doi.toLowerCase();
+      const match = index.find((d) => d.doi && d.doi.toLowerCase() === normDoi);
+      if (match) return { found: true, matchedTitle: match.title };
     }
 
-    // 2) Title search fallback
+    // 2) Fuzzy title match against cached index
     if (title) {
-      const results = await searchByTitle(title, accessToken);
-      const match = results.find((doc) => titlesMatch(doc.title || "", title));
+      const match = index.find((d) => titlesMatch(d.title, title));
       if (match) return { found: true, matchedTitle: match.title };
     }
 
     return { found: false };
   } catch (e) {
-    console.error("Mendeley API error:", e);
+    console.error("[MSC] Mendeley API error:", e);
     return { found: false, error: e.message };
   }
 }
@@ -207,7 +233,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "LOGOUT") {
-    clearTokens().then(() => sendResponse({ success: true }));
+    Promise.all([clearTokens(), invalidateLibraryCache()]).then(() => sendResponse({ success: true }));
     return true;
   }
 
@@ -344,6 +370,8 @@ async function addToLibrary({ title, doi, authors, year, journal, url, pdfUrl })
         console.log("[Mendeley] No free PDF found for this paper");
       }
 
+      // Invalidate cache so the new paper is picked up on the next check
+      await invalidateLibraryCache();
       return { success: true, id: created.id, title: created.title, pdfAttached };
     } else {
       const errText = await res.text();

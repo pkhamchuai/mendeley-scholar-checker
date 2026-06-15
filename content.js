@@ -9,12 +9,19 @@ function extractDOI(el) {
   const links = el.querySelectorAll("a[href]");
   for (const link of links) {
     const href = link.href || "";
-    const doiMatch = href.match(/(?:doi\.org\/|\/doi\/)?(10\.\d{4,}\/[^\s&"'>]+)/i);
-    if (doiMatch) return decodeURIComponent(doiMatch[1]);
+    // Require explicit doi.org/ prefix to avoid false positives (e.g. PDF URLs with DOI-like paths)
+    const doiMatch = href.match(/doi\.org\/(10\.\d{4,}\/[^\s&"'>]+)/i);
+    if (doiMatch) {
+      let doi = decodeURIComponent(doiMatch[1]);
+      // Strip trailing file-type path segments added by some publishers
+      doi = doi.replace(/\/(pdf|html|htm|xml|full|abstract|meta|references?)$/i, "");
+      doi = doi.replace(/\.(pdf|html|htm|xml)$/i, "");
+      return doi;
+    }
   }
   const text = el.innerText || "";
   const textMatch = text.match(/\bdoi[:\s]+?(10\.\d{4,}\/\S+)/i);
-  if (textMatch) return textMatch[1];
+  if (textMatch) return textMatch[1].replace(/\.(pdf|html|htm|xml)$/i, "");
   return null;
 }
 
